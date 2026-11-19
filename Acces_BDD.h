@@ -22,6 +22,9 @@ class Acces_BDD
         bool Select(string requete);
         bool Insert(string requete);
         bool IsConnexionOK(){return n_connect_ok;};
+        string GetLastError(){return n_last_error;};
+        unsigned int GetNbColonnes(){return n_nombreColonnesResultat;};
+        const vector<string>& GetLastResult(){return n_last_result;};
         ~Acces_BDD();
     private:
         Session *n_session;
@@ -29,8 +32,6 @@ class Acces_BDD
         unsigned int n_nombreColonnesResultat;
         vector<string> n_last_result;
         bool n_connect_ok;
-    
-
 };
 
 #endif // ACCES_BDD_H
