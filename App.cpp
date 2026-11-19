@@ -39,8 +39,8 @@ bool App::Init(string &dsn){
     {
         GrovePi::initGrovePi();
         cout<<"PinMode :"<<endl;
-        GrovePi::pinMode(PIN_DEBIT_AIR,GrovePi::INPUT);     // lecture du débit (A0)
-        GrovePi::pinMode(PIN_PUISSANCE,GrovePi::OUTPUT);    // PWM puissance (D9)
+        GrovePi::pinMode(PIN_DEBIT_AIR,GrovePi::INPUT); // lecture du débit (A0)
+        GrovePi::pinMode(PIN_PUISSANCE,GrovePi::OUTPUT); // PWM puissance (D9)
     }
     catch(const std::exception &e)
     {
@@ -91,7 +91,7 @@ void App::Arret()
 {
     if(m_debit!=NULL){
         m_debit->SetFinDemandee();
-        m_debit->Wait();              // thread joignable : on attend sa fin
+        m_debit->Wait(); // thread joignable : on attend sa fin
         delete m_debit;
         m_debit=NULL;
     }
@@ -105,7 +105,7 @@ void App::Arret()
 
 App::~App()
 {
-    Arret();                          // threads arrêtés AVANT de fermer la BDD
+    Arret(); // threads arrêtés AVANT de fermer la BDD
     delete m_acces_bdd;
     m_acces_bdd=NULL;
 }
