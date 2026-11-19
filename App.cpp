@@ -1,58 +1,111 @@
 #include "App.h"
+#include <grovepi.h>
+#include <wx/utils.h>
+#include <signal.h>
+#include <exception>
+
+// Mis à 1 par Ctrl+C (SIGINT) ou SIGTERM pour sortir de Loop()
+static volatile sig_atomic_t g_arret_demande = 0;
+static void OnSignal(int) { g_arret_demande = 1; }
 
 App::App()
 {
+    m_acces_bdd=NULL;
+    m_puissance=NULL;
+    m_debit=NULL;
+    m_id_module=ID_MODULE_VENTILATION;
 }
+
 bool App::Init(string &dsn){
-    bool retour=true;
     m_dsn=dsn;
+    signal(SIGINT,OnSignal);
+    signal(SIGTERM,OnSignal);
+
     cout<<"Initialisation du système de ventilation"<<endl;
     cout<<"----------------------------------------"<<endl;
     cout<<"|| Accès à la base de données ||"<<endl;
     cout<<"Connexion sur :"<<m_dsn<<endl;
     m_acces_bdd=new Acces_BDD(m_dsn);
-    retour=m_acces_bdd->IsConnexionOK();
-    //VOIR ID DU VENTILATEUR
-    cout<<"----------------------------------------"<<endl;
-    cout<<"|| Puissance ||"<<endl;
-    m_puissance= new Thread_Puissance();
-	if ( m_puissance->Create() != wxTHREAD_NO_ERROR )
-	{
-		cout<<"App: Création thread détaché impossible!"<<endl;
-		return false;
-	}
-	else
-	{
-		cout<<"App: thread détaché lancé"<<endl;
-		m_puissance->Run();
-	}
+    if(!m_acces_bdd->IsConnexionOK())
+    {
+        cout<<"App: base de données inaccessible"<<endl;
+        return false;
+    }
+
     cout<<"----------------------------------------"<<endl;
     cout<<"||  Convertisseur  ||"<<endl;
     cout<<"    GrovePi :"<<endl;
-    //initGrovePi();
-    cout<<"PinMode :"<<endl;
-    //pinMode(PIN_DEBIT_AIR,OUTPUT);
-    //pinMode(PIN_PUISSANCE,INPUT);
+    try
+    {
+        GrovePi::initGrovePi();
+        cout<<"PinMode :"<<endl;
+        GrovePi::pinMode(PIN_DEBIT_AIR,GrovePi::INPUT);     // lecture du débit (A0)
+        GrovePi::pinMode(PIN_PUISSANCE,GrovePi::OUTPUT);    // PWM puissance (D9)
+    }
+    catch(const std::exception &e)
+    {
+        cout<<"App: erreur GrovePi : "<<e.what()<<endl;
+        return false;
+    }
+
     cout<<"----------------------------------------"<<endl;
-    return retour;
+    cout<<"|| Puissance ||"<<endl;
+    m_puissance= new Thread_Puissance();
+    if ( m_puissance->Create() != wxTHREAD_NO_ERROR )
+    {
+        cout<<"App: Création thread puissance impossible!"<<endl;
+        delete m_puissance;
+        m_puissance=NULL;
+        return false;
+    }
+    m_puissance->Run();
+    cout<<"App: thread puissance lancé"<<endl;
+
+    cout<<"----------------------------------------"<<endl;
+    cout<<"|| Débit d'air ||"<<endl;
+    m_debit= new Thread_DebitAir(m_acces_bdd,m_id_module);
+    if ( m_debit->Create() != wxTHREAD_NO_ERROR )
+    {
+        cout<<"App: Création thread débit d'air impossible!"<<endl;
+        delete m_debit;
+        m_debit=NULL;
+        return false;
+    }
+    m_debit->Run();
+    cout<<"App: thread débit d'air lancé"<<endl;
+    cout<<"----------------------------------------"<<endl;
+    return true;
 }
 
 bool App::Loop(){
-    bool retour=true;
-    while(retour==true){
+    // Plus de boucle active à 100 % CPU : on dort, les threads travaillent
+    while(!g_arret_demande){
+        wxMilliSleep(200);
     }
-    /*cout<<"App: demande de fin du thread joignable"<<endl;
-    m_thread_joignable->SetFinDemandee();
+    cout<<"App: arrêt demandé"<<endl;
+    Arret();
+    return true;
+}
 
-    // on attend la fin du thread joignable
-    cout<<"App: attente fin thread joignable"<<endl;
-    long i=(long)m_thread_joignable->Wait();
-    cout<<"Le thread joignable a terminé et à compté jusqu'à "<<i<<endl;
-    delete m_thread_joignable;
-    */
-    return retour;
+void App::Arret()
+{
+    if(m_debit!=NULL){
+        m_debit->SetFinDemandee();
+        m_debit->Wait();              // thread joignable : on attend sa fin
+        delete m_debit;
+        m_debit=NULL;
+    }
+    if(m_puissance!=NULL){
+        m_puissance->SetFinDemandee();
+        m_puissance->Wait();
+        delete m_puissance;
+        m_puissance=NULL;
+    }
 }
 
 App::~App()
 {
+    Arret();                          // threads arrêtés AVANT de fermer la BDD
+    delete m_acces_bdd;
+    m_acces_bdd=NULL;
 }
