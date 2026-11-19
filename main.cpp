@@ -10,11 +10,18 @@ int main( int argc, char** argv )
 {
 	// initialize wxWidgets
 	wxInitializer init;
-	//wxPrintf( wxT("Hello in wxWidgets World!\n\n") );
+	if ( !init.IsOk() )
+	{
+		cerr<<"Initialisation de wxWidgets impossible"<<endl;
+		return 1;
+	}
     string dsn="RKBDD";
     //DECLARATION
     App MyApp;
-    MyApp.Init(dsn);
+    if ( !MyApp.Init(dsn) )
+    {
+        cerr<<"Initialisation du système de ventilation échouée"<<endl;
+        return 1;
     MyApp.Loop();
     return 0;
 }
